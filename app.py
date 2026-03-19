@@ -102,9 +102,13 @@ if current_price > 0 and latest_nav > 0:
     col_a.metric("标普油气 XOP", f"{xop_pct * 100:.2f}%")
     col_b.metric("USD/CNH 汇率", f"{fx_pct * 100:.2f}%")
 
-    if nav_data is not None:
+ if nav_data is not None:
         st.markdown("---")
         st.subheader("📋 详细历史数据")
         display_df = nav_data.tail(10).sort_values(by='净值日期', ascending=False)
-        display_df = display_df[['净值日期', '单位净值', '累计净值', '日增长率']]
+        
+        # 穿上防弹衣：只提取实际存在的列，防止 KeyError
+        safe_cols = [c for c in ['净值日期', '单位净值', '累计净值', '日增长率'] if c in display_df.columns]
+        display_df = display_df[safe_cols]
+        
         st.dataframe(display_df, use_container_width=True)
