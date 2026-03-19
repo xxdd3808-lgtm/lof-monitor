@@ -47,14 +47,13 @@ def get_market_data():
     except Exception as e:
         debug_log.append(f"获取官方净值(东财)失败: {e}")
         latest_nav, nav_date, nav_data = 0.0, "N/A", None
-    # 3. 美股 XOP
+    # 3. 美股 XOP (换回东财接口，锁定官方纯净收盘价)
     try:
-        xop = yf.Ticker("XOP")
-        xop_prev = float(xop.fast_info['previousClose'])
-        xop_curr = float(xop.fast_info['lastPrice'])
-        xop_pct = (xop_curr - xop_prev) / xop_prev if xop_prev > 0 else 0.0
+        us_stock = ak.stock_us_spot_em()
+        xop_row = us_stock[us_stock['代码'] == 'XOP']
+        xop_pct = float(xop_row.iloc[0]['涨跌幅']) / 100 if not xop_row.empty else 0.0
     except Exception as e:
-        debug_log.append(f"获取XOP(雅虎)失败: {e}")
+        debug_log.append(f"获取XOP(东财)失败: {e}")
         xop_pct = 0.0
 
     # 4. 汇率 USDCNH
