@@ -39,15 +39,14 @@ def get_market_data():
         debug_log.append(f"获取场内价格(雅虎)失败: {e}")
         current_price = 0.0
         
-    # 2. 官方最新净值 (新浪)
+    # 2. 官方最新净值 (恢复为东方财富，实测对海外宽容)
     try:
-        nav_data = ak.fund_open_fund_info_sina(symbol="162411")
+        nav_data = ak.fund_open_fund_info_em(symbol="162411", indicator="单位净值走势")
         latest_nav = float(nav_data.iloc[-1]['单位净值'])
         nav_date = str(nav_data.iloc[-1]['净值日期'])[:10]
     except Exception as e:
-        debug_log.append(f"获取官方净值(新浪)失败: {e}")
+        debug_log.append(f"获取官方净值(东财)失败: {e}")
         latest_nav, nav_date, nav_data = 0.0, "N/A", None
-
     # 3. 美股 XOP
     try:
         xop = yf.Ticker("XOP")
