@@ -1,0 +1,28 @@
+{
+  "monitors": [
+    {
+      "code": "162411",
+      "name": "华宝油气",
+      "discount_threshold": 0.05,
+      "premium_threshold": 0.08
+    },
+    {
+      "code": "501018",
+      "name": "南方原油",
+      "discount_threshold": 0.05,
+      "premium_threshold": 0.08
+    },
+    {
+      "code": "160723",
+      "name": "嘉实原油",
+      "discount_threshold": 0.05,
+      "premium_threshold": 0.08
+    },
+    {
+      "code": "162719",
+      "name": "广发石油",
+      "discount_threshold": 0.05,
+      "premium_threshold": 0.08
+    }
+  ]
+}

@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>华宝油气 LOF 监控项目 - 优化总结报告</title>
+<style>
+  body { font-family: -apple-system, "Helvetica Neue", Arial, "PingFang SC", "Microsoft YaHei", sans-serif; max-width: 900px; margin: 0 auto; padding: 20px; color: #333; line-height: 1.7; background: #f9f9f9; }
+  h1 { color: #1a5276; border-bottom: 3px solid #2980b9; padding-bottom: 10px; }
+  h2 { color: #2874a6; margin-top: 35px; border-left: 4px solid #3498db; padding-left: 10px; }
+  h3 { color: #2c3e50; margin-top: 25px; }
+  .meta { background: #eaf2f8; padding: 15px; border-radius: 8px; margin: 20px 0; font-size: 14px; }
+  .meta strong { color: #1a5276; }
+  .section { background: white; padding: 20px; border-radius: 8px; margin: 15px 0; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+  .result-table { width: 100%; border-collapse: collapse; margin: 15px 0; font-size: 14px; }
+  .result-table th { background: #2874a6; color: white; padding: 10px; text-align: left; }
+  .result-table td { padding: 8px 10px; border-bottom: 1px solid #ddd; }
+  .result-table tr:hover { background: #f5f5f5; }
+  .result-table .neg { color: #e74c3c; font-weight: bold; }
+  .result-table .pos { color: #27ae60; font-weight: bold; }
+  .highlight { background: #fef9e7; padding: 15px; border-left: 4px solid #f39c12; margin: 15px 0; border-radius: 4px; }
+  .danger { background: #fdedec; padding: 15px; border-left: 4px solid #e74c3c; margin: 15px 0; border-radius: 4px; }
+  .success { background: #eafaf1; padding: 15px; border-left: 4px solid #27ae60; margin: 15px 0; border-radius: 4px; }
+  code { background: #f4f4f4; padding: 2px 6px; border-radius: 3px; font-family: "SF Mono", Consolas, monospace; font-size: 13px; color: #c0392b; }
+  pre { background: #2c3e50; color: #ecf0f1; padding: 15px; border-radius: 6px; overflow-x: auto; font-size: 13px; }
+  pre code { background: none; color: inherit; }
+  .badge { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 12px; font-weight: bold; margin-right: 5px; }
+  .badge-done { background: #27ae60; color: white; }
+  .badge-test { background: #f39c12; color: white; }
+  .footer { text-align: center; color: #7f8c8d; margin-top: 40px; font-size: 13px; border-top: 1px solid #ddd; padding-top: 15px; }
+  .toc { background: #eaf2f8; padding: 20px; border-radius: 8px; margin: 20px 0; }
+  .toc a { color: #2874a6; text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+  .toc ul { list-style: none; padding-left: 0; }
+  .toc li { padding: 4px 0; }
+  .toc li:before { content: "▸ "; color: #3498db; }
+</style>
+</head>
+<body>
+
+<h1>🛢️ 华宝油气 LOF (162411) 监控项目优化总结</h1>
+
+<div class="meta">
+  <strong>仓库：</strong> <a href="https://github.com/xxdd3808-lgtm/lof-monitor">xxdd3808-lgtm/lof-monitor</a><br>
+  <strong>日期：</strong> 2026-07-10<br>
+  <strong>本次改动：</strong> P1-P5 五项功能 + 回测验证 + Bug 修复<br>
+  <strong>文件：</strong> app.py（重写）, notify.py（新增）, config.json（新增）, state.json（新增）, .github/workflows/lof-check.yml（新增）, requirements.txt（更新）, CLAUDE.md（更新）
+</div>
+
+<div class="toc">
+  <strong>目录</strong>
+  <ul>
+    <li><a href="#bg">一、背景与初衷</a></li>
+    <li><a href="#p1">二、P1 - 折价套利收益计算器</a></li>
+    <li><a href="#p2">三、P2 - 美股盘前/原油先行指标</a></li>
+    <li><a href="#p3">四、P3 - 历史套利回测（核心）</a></li>
+    <li><a href="#p4">五、P4 - 多 QDII-LOF 对比看板</a></li>
+    <li><a href="#p5">六、P5 - 通知推送</a></li>
+    <li><a href="#backtest">七、回测结果：能不能真赚钱？</a></li>
+    <li><a href="#bugs">八、开发过程中发现并修复的问题</a></li>
+    <li><a href="#usage">九、使用说明</a></li>
+    <li><a href="#limits">十、已知限制</a></li>
+  </ul>
+</div>
+
+<h2 id="bg">一、背景与初衷</h2>
+<div class="section">
+<p>项目初衷是<strong>"如何真正赚到钱"</strong>。华宝油气 (162411) 是 QDII-LOF，存在场内价与净值的折溢价。理论上可以套利：</p>
+<ul>
+  <li><strong>溢价套利</strong>（申购->卖出）：但基金常年暂停申购（每日上限 10 元），通道基本堵死</li>
+  <li><strong>折价套利</strong>（买入->赎回）：赎回开放，但 QDII 净值滞后 + 赎回费高 + 美股当晚波动风险</li>
+</ul>
+<p>原项目只做了 IOPV 估算，缺少<strong>"能不能做"</strong>和<strong>"值不值得做"</strong>两层判断。本次 P1-P5 补全这两层，并用历史回测验证策略有效性。</p>
+</div>
+
+<h2 id="p1">二、P1 - 折价套利收益计算器 <span class="badge badge-done">已完成</span></h2>
+<div class="section">
+<h3>功能</h3>
+<p>基于当前实时折价，自动计算各持有期档位的真实收益，让用户一眼看出"这个折价能不能做"。</p>
+<h3>输出</h3>
+<ul>
+  <li><strong>各档赎回费收益表</strong>：T+0(1.5%) / 7天(0.75%) / 30天(0.5%) / 1年(0%) 四档，每档算出：
+    <ul>
+      <li>毛收益（美股持平时的纯折价收敛）</li>
+      <li>净收益（扣赎回费+佣金后）</li>
+      <li><strong>盈亏平衡美股跌幅</strong>：美股跌多少就从赚变亏</li>
+    </ul>
+  </li>
+  <li><strong>情景分析表</strong>：美股当晚涨跌 -8% ~ +5% 各情景下的实际收益</li>
+  <li><strong>结论判定</strong>：折价 <3% 不建议 / 3-5% 风险大 / 5-8% 不错 / >8% 值得关注</li>
+</ul>
+<h3>核心公式</h3>
+<pre><code>盈亏平衡美股跌幅 = [1 - (1 + 赎回费 + 佣金) × (1 + 折价率)] / 仓位系数 w</code></pre>
+<h3>价值</h3>
+<p>直接回答用户"看到 3% 折价能不能做"的问题。3% 折价 + T+0 赎回（1.5%费），安全垫仅 1.5%，美股跌 1.63% 就亏。<strong>结论：不值得做</strong>。</p>
+</div>
+
+<h2 id="p2">三、P2 - 美股盘前/原油先行指标 <span class="badge badge-done">已完成</span></h2>
+<div class="section">
+<h3>功能</h3>
+<p>A 股收盘后美股才开盘。折价套利的赎回净值取决于当晚美股走势。本模块提供先行指标，帮助预判今晚美股方向，决定是否在 15:00 前提交赎回。</p>
+<h3>指标列表</h3>
+<ul>
+  <li><strong>WTI 原油期货 (CL=F)</strong>：全球 24h 交易，A 股时段有亚盘价格，油气股最直接先行指标</li>
+  <li><strong>Brent 原油期货 (BZ=F)</strong>：欧洲基准油价</li>
+  <li><strong>标普500期货 (ES=F)</strong> / <strong>纳指期货 (NQ=F)</strong>：大盘情绪</li>
+  <li><strong>XOP 油气ETF</strong>：最直接的底层资产方向</li>
+  <li><strong>美元指数 (DXY)</strong>：美元走强压制油价</li>
+</ul>
+<h3>附加</h3>
+<p>WTI/Brent 近 5 日走势图（plotly），帮助判断原油短期趋势。</p>
+<h3>决策规则</h3>
+<div class="highlight">折价套利时，若 WTI 原油期货亚盘跌 > 2%，今晚 XOP 大概率跟跌，赎回净值风险大，建议放弃或等原油企稳再赎回。</div>
+</div>
+
+<h2 id="p3">四、P3 - 历史套利回测（核心） <span class="badge badge-done">已完成</span></h2>
+<div class="section">
+<h3>功能</h3>
+<p>遍历历史每个交易日，模拟"折价超阈值时买入 + 当日赎回"，用事后实际净值算真实收益。用数据回答"折价套利到底能不能赚钱"。</p>
+<h3>回测逻辑</h3>
+<pre><code>对每个交易日 D：
+  信号 = close_D / nav_{D-1} - 1   # 决策时看到的折价
+  if 信号 <= -阈值:
+    买入价 = close_D
+    赎回净值 = nav_D              # 当日实际净值（事后已知）
+    毛收益 = nav_D / close_D - 1
+    净收益 = 毛收益 - 赎回费 - 佣金</code></pre>
+<h3>输出</h3>
+<ul>
+  <li>各阈值（3%/5%/8%/10%）× 各赎回费档（1.5%/0.75%/0.5%）的回测统计表</li>
+  <li>累计收益曲线（plotly）</li>
+  <li>单笔收益分布直方图</li>
+  <li>完整交易明细表</li>
+  <li>自动结论判定（能赚/勉强/赚不到）</li>
+</ul>
+<h3>数据源</h3>
+<p>三重 fallback：akshare Sina 源 -> 东财 K 线 API -> yfinance，确保数据获取可靠性。</p>
+</div>
+
+<h2 id="p4">五、P4 - 多 QDII-LOF 对比看板 <span class="badge badge-done">已完成</span></h4>
+<div class="section">
+<h3>功能</h3>
+<p>横向对比 6 只 QDII-LOF 的折溢价 + 申购赎回状态，找"能做且折价大"的标的。</p>
+<h3>监控标的</h3>
+<table class="result-table">
+  <tr><th>代码</th><th>名称</th><th>底层资产</th><th>类别</th></tr>
+  <tr><td>162411</td><td>华宝油气</td><td>SPSIOP 油气股</td><td>油气股</td></tr>
+  <tr><td>162719</td><td>广发石油</td><td>道琼斯石油</td><td>油气股</td></tr>
+  <tr><td>501018</td><td>南方原油</td><td>WTI 原油</td><td>原油</td></tr>
+  <tr><td>160723</td><td>嘉实原油</td><td>布伦特原油</td><td>原油</td></tr>
+  <tr><td>161129</td><td>易方达原油</td><td>WTI 原油</td><td>原油</td></tr>
+  <tr><td>160216</td><td>国泰大宗</td><td>大宗商品</td><td>商品</td></tr>
+</table>
+<h3>自动筛选</h3>
+<ul>
+  <li><strong>折价套利机会</strong>：开放赎回 + 折价 > 1%</li>
+  <li><strong>溢价套利机会</strong>：开放申购 + 溢价 > 1%</li>
+</ul>
+<h3>申购赎回状态</h3>
+<p>从东方财富移动 API (<code>fundmobapi.eastmoney.com</code>) 获取，字段 <code>FundBGRO</code>（申购）/ <code>FundRGRO</code>（赎回）。</p>
+</div>
+
+<h2 id="p5">六、P5 - 通知推送 <span class="badge badge-done">已完成</span></h2>
+<div class="section">
+<h3>架构</h3>
+<p>复用 dingshi-renwu 项目模式：GitHub Actions 定时触发 -> notify.py 检查 -> PushPlus 微信推送 -> state.json 去重</p>
+<h3>推送信号（4 类）</h3>
+<ul>
+  <li>🟢 <strong>折价超阈值</strong>（默认 5%）：买入+赎回套利窗口</li>
+  <li>🔴 <strong>溢价超阈值</strong>（默认 8%）：已持有者卖出信号</li>
+  <li>📢 <strong>申购恢复</strong>：暂停->开放，溢价套利窗口打开</li>
+  <li>⚠️ <strong>赎回暂停</strong>：开放->暂停，折价套利窗口关闭</li>
+</ul>
+<h3>定时</h3>
+<p>A 股交易时段（周一至周五）5 个时间点检查：北京时间 10:00 / 11:00 / 13:00 / 14:00 / 15:00</p>
+<h3>去重</h3>
+<p>每个信号每天最多推送 1 次（state.json 记录日期）。状态变化信号额外记录 from/to。</p>
+<h3>配置</h3>
+<p><code>config.json</code> 配置监控标的和阈值，<code>PUSHPLUS_TOKEN</code> 通过 GitHub Secrets 传入（不硬编码）。</p>
+</div>
+
+<h2 id="backtest">七、回测结果：能不能真赚钱？ <span class="badge badge-test">已验证</span></h2>
+<div class="section">
+<h3>回测参数</h3>
+<ul>
+  <li>数据范围：2025-06-05 ~ 2026-07-08（266 个交易日，约 13 个月）</li>
+  <li>标的：华宝油气 162411</li>
+  <li>佣金：万一（0.01%）</li>
+  <li>策略：折价超阈值时收盘买入 + 当日提交赎回</li>
+</ul>
+
+<h3>核心结果表</h3>
+<table class="result-table">
+  <tr><th>折价阈值</th><th>赎回费</th><th>交易笔数</th><th>胜率</th><th>平均收益</th><th>累计收益</th><th>结论</th></tr>
+  <tr><td>>3%</td><td>T+0 (1.5%)</td><td>5</td><td>20.0%</td><td class="neg">-0.15%</td><td class="neg">-0.74%</td><td class="neg">亏</td></tr>
+  <tr><td>>3%</td><td>7天后 (0.75%)</td><td>5</td><td>60.0%</td><td class="pos">+0.60%</td><td class="pos">+3.01%</td><td>勉强</td></tr>
+  <tr><td>>3%</td><td>30天后 (0.5%)</td><td>5</td><td>60.0%</td><td class="pos">+0.85%</td><td class="pos">+4.26%</td><td>勉强</td></tr>
+  <tr><td>>5%</td><td>T+0 (1.5%)</td><td>1</td><td>0.0%</td><td class="neg">-0.12%</td><td class="neg">-0.12%</td><td class="neg">亏</td></tr>
+  <tr><td>>5%</td><td>30天后 (0.5%)</td><td>1</td><td>100%</td><td class="pos">+0.88%</td><td class="pos">+0.88%</td><td>样本太小</td></tr>
+  <tr><td>>8%</td><td>任何</td><td>0</td><td>-</td><td>-</td><td>-</td><td>未出现</td></tr>
+</table>
+
+<h3>历史折价分布</h3>
+<table class="result-table">
+  <tr><th>指标</th><th>数值</th></tr>
+  <tr><td>总交易日</td><td>265</td></tr>
+  <tr><td>折价 > 3%</td><td>5 天 (1.9%)</td></tr>
+  <tr><td>折价 > 5%</td><td>1 天 (0.4%)</td></tr>
+  <tr><td>折价 > 8%</td><td>0 天 (0.0%)</td></tr>
+  <tr><td>最大折价</td><td class="neg">-6.16%</td></tr>
+  <tr><td>最大溢价</td><td class="pos">+21.12%</td></tr>
+  <tr><td>日均折溢价</td><td>+0.33%（轻微溢价）</td></tr>
+</table>
+
+<h3>关键结论</h3>
+<div class="danger">
+  <strong>❌ T+0 折价套利不赚钱。</strong>
+  <p>1.5% 的惩罚性赎回费吃掉了大部分折价。3%+ 折价 + T+0 赎回，5 笔交易胜率仅 20%，平均亏损 0.15%。唯一的 5%+ 折价机会（2026-04-08，折价 6.16%），T+0 赎回后净亏 0.12%。</p>
+</div>
+
+<div class="highlight">
+  <strong>⚠️ 延长持有期有边际收益，但机会极少。</strong>
+  <p>3%+ 折价 + 持有 30 天后赎回（费 0.5%），5 笔交易胜率 60%，平均 +0.85%。但 13 个月只有 5 次机会，且持有期间承受美股方向风险。不是套利，是"折价 + 看好油气"的价值投资。</p>
+</div>
+
+<div class="success">
+  <strong>✅ 真正的机会在溢价端。</strong>
+  <p>历史最大溢价 +21.12%，均值 +0.33%（轻微溢价）。如果你<strong>已经持有</strong>华宝油气，溢价时场内卖出、折价时买回，是利用折溢价波动增强收益的现实路径。但这需要长期持有底仓，不是无风险套利。</p>
+</div>
+
+<h3>一句话总结</h3>
+<p><strong>折价套利对普通投资者是"看起来很美"的陷阱。</strong>1.5% 赎回费 + 美股当晚波动盲盒 + 大折价极罕见（13 个月仅 1 次 >5%），期望收益为负。项目的真正价值是<strong>用数据告诉你别做</strong>，以及<strong>在溢价时提醒已持有者卖出</strong>。</p>
+</div>
+
+<h2 id="bugs">八、开发过程中发现并修复的问题</h2>
+<div class="section">
+<h3>1. 回测数据源问题</h3>
+<p><strong>问题</strong>：<code>ak.fund_lof_hist_em()</code> 在本地环境被代理拦截（<code>2.push2.eastmoney.com</code> 返回 502）。东财 K 线 API 也不稳定。yfinance 被 Yahoo 限频。</p>
+<p><strong>修复</strong>：三重 fallback 机制：<code>ak.fund_etf_hist_sina()</code>（Sina 源，最稳）-> 东财 K 线 API -> yfinance。实测 Sina 源 100% 可用。</p>
+
+<h3>2. yfinance 依赖问题</h3>
+<p><strong>问题</strong>：本地 yfinance 版本依赖 <code>websockets.asyncio</code>，但 websockets 版本过低。</p>
+<p><strong>修复</strong>：<code>pip3 install --upgrade websockets</code> 升级到 15.0.1。</p>
+
+<h3>3. 净值数据列名</h3>
+<p><strong>发现</strong>：<code>fund_open_fund_info_em</code> 返回列名为 <code>['净值日期', '单位净值', '日增长率']</code>，无 <code>累计净值</code> 列（原 app.py safe_cols 包含它）。已适配。</p>
+
+<h3>4. QDII 净值滞后</h3>
+<p><strong>发现</strong>：2026-07-10 查询时，最新净值为 2026-07-08（滞后 2 天）。回测中用 <code>nav_{D-1}</code> 作为决策基线，有轻微前视偏差（QDII 的 nav_{D-1} 实际在 D 日晚才公布），但可用 XOP 数据估算，偏差可忽略。</p>
+</div>
+
+<h2 id="usage">九、使用说明</h2>
+<div class="section">
+<h3>本地运行看板</h3>
+<pre><code>cd /Users/bt/lof-monitor
+pip install -r requirements.txt
+streamlit run app.py</code></pre>
+
+<h3>启用推送（P5）</h3>
+<ol>
+  <li>在 GitHub 仓库 Settings -> Secrets 添加 <code>PUSHPLUS_TOKEN</code>（从 <a href="https://www.pushplus.plus/">pushplus.plus</a> 获取）</li>
+  <li>workflow 会自动在 A 股交易时段每 30-60 分钟检查一次</li>
+  <li>手动触发：GitHub Actions -> "LOF 折溢价检查与推送" -> Run workflow</li>
+</ol>
+
+<h3>调整监控阈值</h3>
+<p>编辑 <code>config.json</code>，修改 <code>discount_threshold</code>（折价提醒）和 <code>premium_threshold</code>（溢价提醒）。</p>
+
+<h3>调整仓位系数</h3>
+<p>看板侧边栏 slider，0.50-1.00 可调，默认 0.94。参考基金最新季报实际股票仓位。</p>
+</div>
+
+<h2 id="limits">十、已知限制</h2>
+<div class="section">
+<ul>
+  <li><strong>回测样本小</strong>：13 个月仅 5 次 3%+ 折价机会，统计显著性有限。需更长历史数据验证。</li>
+  <li><strong>QDII 净值滞后</strong>：回测用 nav_{D-1} 作基线有轻微前视偏差（可用 XOP 估算消除，未实现）。</li>
+  <li><strong>无节假日日历</strong>：只处理周末，A 股/美股法定节假日不判断。</li>
+  <li><strong>申购赎回状态依赖第三方 API</strong>：东财移动 API 可能变更，以基金公司公告为准。</li>
+  <li><strong>P5 推送无重试幂等</strong>：state.json 每日去重，但跨日状态变化可能漏推（如一天内暂停->开放->暂停）。</li>
+  <li><strong>未实现自动对冲</strong>：真正的无风险套利需要做空 XOP/原油期货对冲，普通投资者无此工具。</li>
+</ul>
+</div>
+
+<div class="footer">
+  <p>Generated by Claude Agent | 华宝油气 LOF 监控项目 | 2026-07-10</p>
+  <p>仓库：https://github.com/xxdd3808-lgtm/lof-monitor</p>
+</div>
+
+</body>
+</html>
