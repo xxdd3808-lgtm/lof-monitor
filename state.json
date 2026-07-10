@@ -1,4 +1,10 @@
 {
-  "162411_buy_status": {"status": "暂停申购", "date": "2026-07-10"},
-  "162411_redeem_status": {"status": "开放赎回", "date": "2026-07-10"}
+  "162411_buy_status": {
+    "status": "暂停申购",
+    "date": "2026-07-10"
+  },
+  "162411_redeem_status": {
+    "status": "开放赎回",
+    "date": "2026-07-10"
+  }
 }
